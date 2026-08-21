@@ -13,6 +13,7 @@ dependencies = [
     "matplotlib",
     "tifffile",
     "openslide-bin>=4.0.1.2",
+    "tqdm>=4.70.0",
 ]
 
 [project.optional-dependencies]
