@@ -68,6 +68,16 @@ This project uses [uv](https://docs.astral.sh/uv/) to manage virtual environment
    python analysis/analysis_script.py
    ```
 
+## Utilities
+
+### Copy files
+
+The function ``core.copy_files()`` can be used to assist with copying data files from
+the Aperio system to a local drive. The function takes as input a CSV-file, where it is
+expected that the first line of the file are headers, and the second column of the file
+has the Aperio slide IDs. It is also expected that the image files are named using these
+slide IDs.
+
 ## Issues
 
 If you encounter any issues with running the code or have any questions, please create an [Issue](https://github.com/vaioic/pospisilik-lab-adipose-cell-quantification/issues) or send an email to opticalimaging@vai.org. If you are reporting a bug, please include any error messages to aid with troubleshooting.

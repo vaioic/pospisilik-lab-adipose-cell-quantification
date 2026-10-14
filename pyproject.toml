@@ -14,6 +14,10 @@ dependencies = [
     "tifffile",
     "openslide-bin>=4.0.1.2",
     "tqdm>=4.70.0",
+    "openslide-python>=1.4.6",
+    "scipy>=1.18.0",
+    "pandas>=3.0.6",
+    "oic-toolkit",
 ]
 
 [project.optional-dependencies]
@@ -29,3 +33,6 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = "shared"
 module-root = ""
+
+[tool.uv.sources]
+oic-toolkit = { path = "../../Toolboxes/oic-toolkit", editable = true }
