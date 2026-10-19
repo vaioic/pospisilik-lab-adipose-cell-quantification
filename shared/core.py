@@ -10,6 +10,9 @@ from tqdm import tqdm
 
 from shared import core
 
+# Generate custom color map
+CUSTOM_COLORS = (np.random.default_rng(seed=42)).uniform(0.1, 1.0, size=(100, 3))
+
 
 def read_image_from_slide(slide_path):
 
@@ -73,7 +76,7 @@ def copy_files(csv_path, source_dir, destination_dir):
                 print("Skipping file.")
 
 
-def process_directory(input_path, output_path):
+def process_directory(input_path, output_path, skip_done=True, **kwargs):
 
     input_path = Path(input_path)
 
@@ -85,16 +88,30 @@ def process_directory(input_path, output_path):
 
     all_data = []
     for file in tqdm(slide_file_list):
-        df = process_slide(file, output_path)
+        # Check if there's already an output file
+        if skip_done and (output_path / f"{file.stem}.csv").exists():
+            print("Output CSV exists. Skipping file.")
+            continue
 
-        all_data.append(df)
+        try:
+            df = process_slide(file, output_path, **kwargs)
+            all_data.append(df)
+        except Exception as e:
+            print(f"An error occurred: {type(e).__name__} - {e}")
 
-    combined_df = pd.merge(all_data)
+    combined_df = pd.concat(all_data)
 
     combined_df.to_csv(output_path / "combined_data.csv")
 
 
-def process_slide(slide_path, output_path, save_data=True):
+def process_slide(
+    slide_path,
+    output_path,
+    save_data=True,
+    min_cell_size=500,
+    max_cell_size=50000,
+    roi=None,
+):
 
     slide_path = Path(slide_path)
 
@@ -103,18 +120,66 @@ def process_slide(slide_path, output_path, save_data=True):
 
     img = core.read_image_from_slide(slide_path)
 
+    if roi is not None:
+        img = img[roi[0] : roi[1], roi[2] : roi[3]]
+
     img_filt = ndi.median_filter(img, size=3)
 
+    # import matplotlib.pyplot as plt
+
+    # fig, ax = skimage.filters.try_all_threshold(img_filt)
+    # plt.show()
+    # exit()
+
     # Identify the adipose tissue
-    adipose_mask = img_filt > 240
+    th = skimage.filters.threshold_mean(img_filt)
+    adipose_mask = img_filt > th
+    # print(th)
+
+    # import matplotlib.pyplot as plt
+
+    # plt.imshow(adipose_mask)
+    # plt.show()
+    # exit()
 
     adipose_mask = skimage.segmentation.clear_border(adipose_mask)
 
-    adipose_mask = skimage.morphology.remove_small_holes(adipose_mask, max_size=150)
-    adipose_mask = skimage.morphology.remove_small_objects(adipose_mask, max_size=500)
+    # # Try to connect the lines
+    # adipose_mask_boundaries = ~adipose_mask
+
+    # adipose_mask_boundaries_ds = skimage.transform.rescale(
+    #     adipose_mask_boundaries, 0.5, anti_aliasing=None, order=0, preserve_range=True
+    # )
+
+    # adipose_mask_boundaries_closed = skimage.morphology.closing(
+    #     adipose_mask_boundaries_ds, skimage.morphology.disk(15)
+    # )
+
+    # adipose_mask_boundaries_ds_merged = (
+    #     adipose_mask_boundaries_ds ^ adipose_mask_boundaries_closed
+    # )
+
+    # import matplotlib.pyplot as plt
+
+    # plt.imshow(adipose_mask_boundaries_ds_merged)
+    # plt.show()
+    # exit()
+
+    adipose_mask = skimage.morphology.remove_small_holes(adipose_mask, max_size=3000)
+    adipose_mask = skimage.morphology.remove_small_objects(
+        adipose_mask, max_size=min_cell_size
+    )
+
+    if max_cell_size is not None:
+        # Remove large objects
+        adipose_mask_large = skimage.morphology.remove_small_objects(
+            adipose_mask, max_size=max_cell_size
+        )
+
+        adipose_mask = adipose_mask ^ adipose_mask_large
 
     # Measure and export data to CSV
-    labels = skimage.measure.label(adipose_mask)
+    labels = skimage.measure.label(adipose_mask, connectivity=1)
     data = skimage.measure.regionprops_table(labels, properties=("area",))
 
     df = pd.DataFrame(data)
@@ -125,10 +190,22 @@ def process_slide(slide_path, output_path, save_data=True):
         df.to_csv(output_path / f"{fn}.csv", index=False)
 
         # Create output image
-        merged = merge_images(
-            img, skimage.color.label2rgb(labels, bg_color="black"), mode="blend"
-        )
+        try:
+            ds_img = skimage.transform.rescale(img, 0.25)
+            ds_labels = skimage.transform.rescale(
+                labels, 0.25, order=0, anti_aliasing=False, preserve_range=True
+            )
 
-        skimage.io.imsave(output_path / f"{fn}_overlay.png", merged)
+            merged = merge_images(
+                ds_img,
+                skimage.color.label2rgb(
+                    ds_labels, bg_color="black", colors=CUSTOM_COLORS
+                ),
+                mode="blend",
+            )
+
+            skimage.io.imsave(output_path / f"{fn}_overlay.png", merged)
+        except MemoryError as e:
+            print(f"Out of memory when generating merged image: {e}")
 
     return df

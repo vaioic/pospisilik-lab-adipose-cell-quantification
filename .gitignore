@@ -1,5 +1,11 @@
 # Microscope Raw Data and Formats
 
+*.png
+*.tif
+*.jpg
+*.csv
+*.log
+
 # Zeiss
 *.czi
 *.zvi
